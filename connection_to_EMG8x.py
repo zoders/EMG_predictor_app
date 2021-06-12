@@ -8,7 +8,7 @@ import random
 
 
 
-EMG8x_ADDRESS = '192.168.137.46'
+EMG8x_ADDRESS = '192.168.137.109'
 CHANNELS_TO_MONITOR = (1,)
 
 AD1299_NUM_CH = 8
@@ -64,8 +64,6 @@ try:
                 print(lb.classes_[predication.argmax(axis=1)[0]])
                 classes.append(cl)
                 borders.append(brd)
-                # prd_array += prd
-                # brd_array += brd
                 print(prd)
                 print(brd)
                 count = count + 1
@@ -95,7 +93,6 @@ try:
                     dataSamples = samples[offset_toch:offset_toch + SAMPLES_PER_TRANSPORT_BLOCK]
 
                     blockSamples = np.array(dataSamples)
-                    #print(len(blockSamples))
                     print('Ch#{0} Block #{1} mean:{2:10.1f},  var:{3:8.1f}, sec:{4:4.0f}'.format(chIdx, samples[
                         PKT_COUNT_OFFSET], np.mean(blockSamples), np.var(blockSamples) / 1e6, numSamples / SPS))
 
@@ -110,8 +107,6 @@ try:
         else:
             receivedData = sock.recv(TCP_PACKET_SIZE)
             if not receivedData:
-                print("а теперь тут")
-                # probably connection closed
                 break
 
             receivedBuffer += receivedData
@@ -124,32 +119,25 @@ x     -= np.mean(x)
 SPS = 1000.0
 x = np.array(x)
 x = np.reshape(x, len(x))
-print(x)
 hflt        = signal.firls( 513, [ 0.,5., 7.,SPS/2 ], [     0.,0., 1.0,1.0  ], fs = SPS)
 y = np.convolve( hflt, x, 'same' )
 
 
 
-
-# for i in range(num_of_predications):
-#     print(lb.classes_[prd_array[i].argmax(axis=1)[0]])
 fig, ax = plt.subplots()
-#ax.figure(figsize=(20,6))
 plt.plot(y)
-for i in range(num_of_predications):
-    print(borders[i][0], borders[i][1])
-    if int(classes[i]) == 1:
-        ax.vlines(borders[i][0], -300000, 300000, color='red')
-        ax.vlines(borders[i][1], -300000, 300000, color='red')
-        ax.hlines(-300000, borders[i][0], borders[i][1], color='red')
-    if int(classes[i]) == 2:
-        ax.vlines(borders[i][0], -300000, 300000, color='yellow')
-        ax.vlines(borders[i][1], -300000, 300000, color='yellow')
-        ax.hlines(-300000, borders[i][0], borders[i][1], color='yellow')
-    if int(classes[i]) == 3:
-        ax.vlines(borders[i][0], -300000, 300000, color='green')
-        ax.vlines(borders[i][1], -300000, 300000, color='green')
-        ax.hlines(-300000, borders[i][0], borders[i][1], color='green')
+# for i in range(num_of_predications):
+#     print(borders[i][0], borders[i][1])
+#     #if int(classes[i]) == 0:
+#         #ax.hlines(100000, borders[i][0], borders[i][1], color='red')
+#         #ax.vlines(borders[i][0], -100000, 100000, color='red')
+#         #ax.vlines(borders[i][1], -100000, 100000, color='red')
+#         #ax.hlines(-100000, borders[i][0], borders[i][1], color='red')
+#     if iclasses[i]) == 1:
+#         ax.hlines(50000, borders[i][0], borders[i][1], color='green')
+#         ax.vlines(borders[i][0], -50000, 50000, color='green')
+#         ax.vlines(borders[i][1], -50000, 50000, color='green')
+#         ax.hlines(-50000, borders[i][0], borders[i][1], color='green')
 
 plt.grid(True)
 plt.show()

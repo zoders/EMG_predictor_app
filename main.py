@@ -7,14 +7,17 @@ import numpy as np
 from scipy import signal
 import pickle
 from PyQt5 import QtCore, QtWidgets
+# https://pypi.org/project/qt-material/
+from qt_material import apply_stylesheet
 
 
 class GetThread(QtCore.QThread):
     signal = QtCore.pyqtSignal(str)
     rawSamples = np.zeros(0)
-    EMG8x_ADDRESS = ""
+    EMG8x_ADDRESS = "192.168.137.244"
     borders = []
     classes = []
+    filter = False
     def __init__(self, parent=None):
         QtCore.QThread.__init__(self, parent)
 
@@ -56,6 +59,7 @@ class GetThread(QtCore.QThread):
         try:
             while True:
                 if numSamples == (SAMPLES_TO_COLLECT - SAMPLES_PER_TRANSPORT_BLOCK) and not is_predicated:
+                    self.signal.emit("Фильтрация сигнала и ожидание получения анализа...")
                     is_predicated = True
                     num_of_predications = sock.recv(3)
                     print("There are " + str(num_of_predications)[2] + str(num_of_predications)[3] + " predications")
@@ -119,19 +123,41 @@ class WindowApp(QtWidgets.QMainWindow, window.Ui_MainWindow):
         super().__init__()
         self.setupUi(self)
         self.setWindowTitle("EMG Predication App")
-        self.addToolBar(NavigationToolbar(self.mplWidget.canvas, self))
+        navigation_toolbar = NavigationToolbar(self.mplWidget.canvas, self)
+        #navigation_toolbar.
+        self.addToolBar(navigation_toolbar)
+
         self.mplWidget.canvas.axes.grid(True)
+        self.mplWidget.canvas.axes.set_xlabel("время, мс", size=12)
+        self.mplWidget.canvas.axes.set_ylabel("напряжение", size=12 )
         self.timer = QtCore.QTimer()
-        self.timer.setInterval(100)
+        self.timer.setInterval(10)
         self.timer.timeout.connect(self.update_plot)
 
         self.GetThread = GetThread()
         self.getSignal.clicked.connect(self.on_clicked)
+        # self.getSignal.clicked.connect(self.fake_signal)
         self.ipButton.clicked.connect(self.change_ip)
         self.GetThread.started.connect(self.on_started)
         self.GetThread.finished.connect(self.on_finished)
         self.GetThread.signal.connect(self.on_change, QtCore.Qt.QueuedConnection)
 
+    def fake_signal(self):
+        x = np.loadtxt("1.txt")
+        h = np.amax(np.abs(x))
+        self.mplWidget.canvas.axes.clear()
+        self.mplWidget.canvas.axes.grid(True)
+        self.mplWidget.canvas.axes.plot(x)
+        self.mplWidget.canvas.axes.vlines(3900, -h, h, color='yellow')
+        self.mplWidget.canvas.axes.vlines(4500, -h, h, color='yellow')
+        self.mplWidget.canvas.axes.hlines(-h, 3900, 4500, color='yellow')
+        self.mplWidget.canvas.axes.vlines(9900, -h, h, color='green')
+        self.mplWidget.canvas.axes.vlines(10500, -h, h, color='green')
+        self.mplWidget.canvas.axes.hlines(-h, 9900, 10500, color='green')
+        self.mplWidget.canvas.axes.vlines(18300, -h, h, color='red')
+        self.mplWidget.canvas.axes.vlines(18900, -h, h, color='red')
+        self.mplWidget.canvas.axes.hlines(-h, 18300, 18900, color='red')
+        self.mplWidget.canvas.draw()
 
     def change_ip(self):
         self.GetThread.EMG8x_ADDRESS = self.ipLine.text()
@@ -146,7 +172,7 @@ class WindowApp(QtWidgets.QMainWindow, window.Ui_MainWindow):
 
     def on_finished(self):  # Вызывается при завершении потока
         self.timer.stop()
-        self.label.setText("Сигнал от устройства получен")
+        self.label.setText("Сигнал и ответ от устройства получены")
         self.getSignal.setDisabled(False)  # Делаем кнопку активной
         x = self.GetThread.rawSamples
         x -= np.mean(x)
@@ -155,11 +181,15 @@ class WindowApp(QtWidgets.QMainWindow, window.Ui_MainWindow):
         x = np.reshape(x, len(x))
         hflt = signal.firls(513, [0., 5., 7., SPS / 2], [0., 0., 1.0, 1.0], fs=SPS)
         y = np.convolve(hflt, x, 'same')
+        # y = x
         self.mplWidget.canvas.axes.clear()
         self.mplWidget.canvas.axes.grid(True)
         self.mplWidget.canvas.axes.plot(y)
-        h = np.amax(np.abs(x))
+        h = np.amax(np.abs(y))
         for i in range(len(self.GetThread.classes)):
+            self.mplWidget.canvas.axes.text(self.GetThread.borders[i][0] + (self.GetThread.borders[i][1] -
+                                                                            self.GetThread.borders[i][0]) // 2,
+                                            (- h - 1000), self.GetThread.classes[i])
             if int(self.GetThread.classes[i]) == 1:
                 self.mplWidget.canvas.axes.vlines(self.GetThread.borders[i][0], -h, h, color='red')
                 self.mplWidget.canvas.axes.vlines(self.GetThread.borders[i][1], -h, h, color='red')
@@ -172,6 +202,8 @@ class WindowApp(QtWidgets.QMainWindow, window.Ui_MainWindow):
                 self.mplWidget.canvas.axes.vlines(self.GetThread.borders[i][0], -h, h, color='green')
                 self.mplWidget.canvas.axes.vlines(self.GetThread.borders[i][1], -h, h, color='green')
                 self.mplWidget.canvas.axes.hlines(-h, self.GetThread.borders[i][0], self.GetThread.borders[i][1], color='green')
+        self.mplWidget.canvas.axes.set_xlabel("время, мс", size=8)
+        self.mplWidget.canvas.axes.set_ylabel("напряжение", size=8)
         self.mplWidget.canvas.draw()
 
 
@@ -183,16 +215,21 @@ class WindowApp(QtWidgets.QMainWindow, window.Ui_MainWindow):
         self.mplWidget.canvas.axes.clear()
         self.mplWidget.canvas.axes.grid(True)
         self.mplWidget.canvas.axes.plot(self.GetThread.rawSamples)
+        self.mplWidget.canvas.axes.set_xlabel("время, мс", size=8)
+        self.mplWidget.canvas.axes.set_ylabel("напряжение", size=8)
         self.mplWidget.canvas.draw()
 
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
     window = WindowApp()
+    apply_stylesheet(app, theme='light_blue.xml')
     window.show()
     app.exec_()
 
 
 if __name__ == "__main__":
+    # print(socket.gethostname() )
+    # print(socket.gethostbyname(socket.gethostname() ))
     main()
-
+# pyuic5
